@@ -9,7 +9,7 @@ os.environ["HF_HOME"] = os.path.dirname(CACHE_DIR)
 
 from huggingface_hub import login
 # TIP: safer to read from an env var (e.g., os.environ["HF_TOKEN"]) instead of hardcoding
-login(token="")
+login(token=os.getenv("HUGGINGFACE_TOKEN"))
 
 from transformers import (
     pipeline,

@@ -20,7 +20,7 @@ from transformers import (
     AutoModelForCausalLM,
     GenerationConfig,
 )
-login("")
+login(token = os.getenv("HUGGINGFACE_TOKEN"))
 ############################################
 # Config (env overrides)
 ############################################
