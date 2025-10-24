@@ -23,8 +23,9 @@ class AttentionRenderer:
     """
     Post-process and visualize attention over the *prompt* tokens onto the original source.
     Requires a **fast** tokenizer (offset mapping support).
+    
     """
-
+    # to do: add a vector comparsion method using attention dump
     def __init__(self, tokenizer: PreTrainedTokenizerBase, config: Optional[RenderConfig] = None):
         self.tokenizer = tokenizer
         if not getattr(self.tokenizer, "is_fast", False):
@@ -48,7 +49,7 @@ class AttentionRenderer:
         pool_name = pool or self.cfg.pool
 
         # Rebuild the exact prompt used by llama.summarize_code (default)
-        prompt = f"{instruction}\n\n```python\n{code_snippet}\n```"
+        prompt = f"{instruction}\n\n```java\n{code_snippet}\n```"
 
         input_ids, offsets = self._encode_prompt_offsets(prompt)
 
@@ -64,7 +65,7 @@ class AttentionRenderer:
             )
 
         # Locate the code span inside the prompt
-        code_prefix = f"{instruction}\n\n```python\n"
+        code_prefix = f"{instruction}\n\n```java\n"
         code_start = len(code_prefix)
         code_end   = code_start + len(code_snippet)
 
@@ -96,79 +97,7 @@ class AttentionRenderer:
                                for i in range(len(code_snippet))],
             "human_tokens": human_tokens,
         }
-    def debug_prompt_alignment(
-        self,
-        code_snippet: str,
-        generation_result: Dict[str, Any],
-        instruction: str = "Summarize what this Python function does. Be concise and accurate.",
-        pool: Optional[str] = None,
-        limit: int = 15,
-        verbose: bool = True,
-    ) -> Dict[str, Any]:
-        """
-        Inspect prompt tokens, offsets, and pooled scores to debug alignment issues.
-        Returns a dict with counts and mismatches; optionally prints a compact summary.
-        """
-        pool_name = pool or self.cfg.pool
-        prompt = f"{instruction}\n\n```python\n{code_snippet}\n```"
 
-        pools = generation_result.get("global_pooled_attention_over_prompt") or {}
-        if pool_name not in pools:
-            raise KeyError(f"Pooled attention '{pool_name}' not found. Available: {list(pools.keys()) or 'none'}")
-
-        pool_payload = pools[pool_name]
-        prompt_tokens = pool_payload.get("prompt_tokens") or []
-        scores: Sequence[float] = pool_payload.get("scores") or []
-
-        input_ids, offsets = self._encode_prompt_offsets(prompt)
-        recon_tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
-
-        length_summary = {
-            "prompt_tokens": len(prompt_tokens),
-            "scores": len(scores),
-            "offsets": len(offsets),
-            "tokenizer_ids": len(input_ids),
-        }
-
-        mismatches: List[Dict[str, Any]] = []
-        for idx in range(min(len(prompt_tokens), len(recon_tokens), len(offsets))):
-            tok_gen = prompt_tokens[idx]
-            tok_recon = recon_tokens[idx]
-            start, end = offsets[idx]
-            span_text = prompt[start:end]
-            if tok_gen != tok_recon or end <= start:
-                mismatches.append({
-                    "index": idx,
-                    "generated_token": tok_gen,
-                    "tokenizer_token": tok_recon,
-                    "offset": (start, end),
-                    "span_text": span_text,
-                })
-
-        zero_span_indices = [i for i, (s, e) in enumerate(offsets) if e <= s]
-
-        summary = {
-            "pool": pool_name,
-            "lengths": length_summary,
-            "zero_length_spans": zero_span_indices[:limit],
-            "mismatched_tokens": mismatches[:limit],
-        }
-
-        if verbose:
-            print("\n[AttentionRenderer.debug_prompt_alignment]")
-            print("Counts:", length_summary)
-            if zero_span_indices:
-                print(f"Zero-length spans (showing up to {limit}): {zero_span_indices[:limit]}")
-            if mismatches:
-                print(f"Token mismatches (showing up to {limit}):")
-                for m in mismatches[:limit]:
-                    span = m["span_text"].replace("\n", "\\n")
-                    print(f"  idx={m['index']:>4} gen={m['generated_token']!r} tok={m['tokenizer_token']!r} "
-                          f"offset={m['offset']} span={span!r}")
-            else:
-                print("No token mismatches found within the inspected range.")
-
-        return summary
 
     def save_text_dump(
         self,
@@ -320,6 +249,7 @@ pre  {{ white-space: pre-wrap; line-height: 1.35; font-size: 13px; }}
                 out.append((c, i, i+1))
                 i += 1
         return out
+
 
     @staticmethod
     def _project_token_scores_to_chars(
